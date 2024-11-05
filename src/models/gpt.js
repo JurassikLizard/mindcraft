@@ -1,6 +1,8 @@
 import OpenAIApi from 'openai';
 import { getKey, hasKey } from '../utils/keys.js';
 import { strictFormat } from '../utils/text.js';
+import { getCommandDocsAsOpenAI } from '../agent/commands/index.js';
+import { snakeToCamel } from '../utils/text.js';
 
 export class GPT {
     constructor(model_name, url) {
@@ -18,7 +20,7 @@ export class GPT {
         this.openai = new OpenAIApi(config);
     }
 
-    async sendRequest(turns, systemMessage, stop_seq='***') {
+    async sendRequest(turns, systemMessage, stop_seq='***', use_tools=false) {
         let messages = [{'role': 'system', 'content': systemMessage}].concat(turns);
 
         const pack = {
@@ -31,6 +33,9 @@ export class GPT {
             delete pack.stop;
         }
 
+        if (use_tools)
+            pack.tools = getCommandDocsAsOpenAI();
+
         let res = null;
         try {
             console.log('Awaiting openai api response...')
@@ -38,8 +43,18 @@ export class GPT {
             let completion = await this.openai.chat.completions.create(pack);
             if (completion.choices[0].finish_reason == 'length')
                 throw new Error('Context length exceeded'); 
-            console.log('Received.')
+            console.log('Received.');
+
             res = completion.choices[0].message.content;
+            
+            if (completion.choices[0].message.tool_calls && completion.choices[0].message.tool_calls.length > 0) {
+                const function_call = completion.choices[0].message.tool_calls[0].function;
+                const args = JSON.parse(function_call.arguments);
+                res += ' !' + snakeToCamel(function_call.name);
+                if(args.length > 0) {
+                    res += `(${Object.entries(args).map(([k, v], i) => v).join(', ')})`
+                }
+            }
         }
         catch (err) {
             if ((err.message == 'Context length exceeded' || err.code == 'context_length_exceeded') && turns.length > 1) {

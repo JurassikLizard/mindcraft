@@ -128,7 +128,7 @@ export class Prompter {
         ]);
     }
 
-    async replaceStrings(prompt, messages, examples=null, to_summarize=[], last_goals=null) {
+    async replaceStrings(prompt, messages, examples=null, to_summarize=[], last_goals=null, replace_commands=true) {
         prompt = prompt.replaceAll('$NAME', this.agent.name);
 
         if (prompt.includes('$STATS')) {
@@ -139,7 +139,7 @@ export class Prompter {
             let inventory = await getCommand('!inventory').perform(this.agent);
             prompt = prompt.replaceAll('$INVENTORY', inventory);
         }
-        if (prompt.includes('$COMMAND_DOCS'))
+        if (replace_commands === true && prompt.includes('$COMMAND_DOCS'))
             prompt = prompt.replaceAll('$COMMAND_DOCS', getCommandDocs());
         if (prompt.includes('$CODE_DOCS'))
             prompt = prompt.replaceAll('$CODE_DOCS', getSkillDocs());
@@ -195,6 +195,9 @@ export class Prompter {
         await this.checkCooldown();
         let prompt = this.profile.conversing;
         prompt = await this.replaceStrings(prompt, messages, this.convo_examples);
+        if ((this.profile.tool_calling??false) == true)
+            return await this.chat_model.sendRequest(messages, prompt, true);
+        else
         return await this.chat_model.sendRequest(messages, prompt);
     }
 

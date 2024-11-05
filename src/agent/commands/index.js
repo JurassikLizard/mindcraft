@@ -1,4 +1,5 @@
 import { getBlockId, getItemId } from "../../utils/mcdata.js";
+import { camelToSnake } from "../../utils/text.js";
 import { actionsList } from './actions.js';
 import { queryList } from './queries.js';
 
@@ -243,4 +244,28 @@ export function getCommandDocs() {
         }
     }
     return docs + '*\n';
+}
+
+export function getCommandDocsAsOpenAI() {
+    const typeTranslations = {
+        'float':        'number',
+        'int':          'integer',
+        'BlockName':    'string',
+        'ItemName':     'string'
+    }
+
+    let tools = [];
+    for (let command of commandList) {
+        let tool = { type: 'function', function: { description: command.description, name: camelToSnake(command.name.slice(1)), strict: true }};
+        if (command.params) {
+            tool.function.parameters = { type: 'object', properties: {}, required: Object.keys(command.params) };
+            for (let param in command.params) {
+                tool.function.parameters.properties[param] = { 
+                    type: typeTranslations[command.params[param].type]??command.params[param].type,
+                    description: command.params[param].description
+                };
+            }
+        }
+        tools.push(tool);
+    }
 }

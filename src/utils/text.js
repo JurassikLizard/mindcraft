@@ -61,3 +61,11 @@ export function strictFormat(turns) {
     }
     return messages;
 }
+
+export function camelToSnake(str) {
+    return str.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
+
+export function snakeToCamel(str) {
+    return str.replace(/(_\w)/g, match => match[1].toUpperCase());
+}

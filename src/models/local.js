@@ -1,4 +1,6 @@
 import { strictFormat } from '../utils/text.js';
+import { getCommandDocsAsOpenAI } from '../agent/commands/index.js';
+import { snakeToCamel } from '../utils/text.js';
 
 export class Local {
     constructor(model_name, url) {
@@ -8,16 +10,28 @@ export class Local {
         this.embedding_endpoint = '/api/embeddings';
     }
 
-    async sendRequest(turns, systemMessage) {
+    async sendRequest(turns, systemMessage, use_tools=false) {
         let model = this.model_name || 'llama3';
         let messages = strictFormat(turns);
         messages.unshift({role: 'system', content: systemMessage});
         let res = null;
         try {
             console.log(`Awaiting local response... (model: ${model})`)
-            res = await this.send(this.chat_endpoint, {model: model, messages: messages, stream: false});
+            let content = {model: model, messages: messages, stream: false};
+            if (use_tools)
+                content.tools = getCommandDocsAsOpenAI();
+            res = await this.send(this.chat_endpoint, content);
             if (res)
                 res = res['message']['content'];
+            
+            // Tool parsing
+            if (res['message']['tool_calls'] && res['message']['tool_calls'].length > 0) {
+                const function_call = res['message']['tool_calls'][0]['function'];
+                res += ' !' + snakeToCamel(function_call["name"]);
+                if(function_call["arguments"].length > 0) {
+                    res += `(${Object.entries(function_call["arguments"]).map(([k, v], i) => v).join(', ')})`;
+                }
+            }
         }
         catch (err) {
             if (err.message.toLowerCase().includes('context length') && turns.length > 1) {
